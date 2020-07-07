@@ -14,7 +14,7 @@ import (
 	//"strings"
 	"context"
 	"math/big"
-	"time"
+	//"time"
 
 	"github.com/lithammer/shortuuid"
 	quic "github.com/lucas-clemente/quic-go"
@@ -24,24 +24,10 @@ var a string
 
 func main() {
 
-	//	channelone := make(chan string)
-	//	channeltwo := make(chan string)
-	//go tcpserver(channelone)
-	//go udpserver(channeltwo)
-
-	fmt.Println("the value of a ", a)
+	//fmt.Println("the value of a ", a)
 	tcpserver()
 	udpserver()
 	quicserver()
-	//udpserver()
-
-	//		select{
-
-	//			case msg1:=<-channelone:
-
-	//			case msg2:=<channeltwo:
-
-	//		}
 
 }
 func tcpserver() {
@@ -66,13 +52,12 @@ func tcpserver() {
 	}
 
 	c.Write([]byte(a))
+	handling := "tcp"
+	handleClient(c, handling)
+	fmt.Println("Done Handling")
+	c.Write([]byte("File is read"))
 
-	//	netDatafromclient, err := bufio.NewReaderSize(c, 1024).ReadString('\n')
-	//	if err != nil {
-	//		fmt.Println(err)
-	//		return
-	//	}
-
+	c.Close()
 }
 
 func udpserver() {
@@ -85,23 +70,60 @@ func udpserver() {
 	}
 
 	connection, err1 := net.ListenUDP("udp4", s)
+	fmt.Println("conenction ", connection)
 	if err1 != nil {
 		fmt.Println(err)
 		return
 	}
-	defer connection.Close()
-	bufferlocal := make([]byte, 1024)
-	n, addr, err := connection.ReadFromUDP(bufferlocal)
-	fmt.Print("msg from udpclient ", string(bufferlocal[0:n-1]))
+	//	defer connection.Close()
+	//	bufferlocal := make([]byte, 1024)
+	//	n, _, err := connection.ReadFromUDP(bufferlocal)
+	//	fmt.Print("msg from udpclient ", string(bufferlocal[0:n-1]))
+	buffer := make([]byte, 1024)
+	n, addr, err := connection.ReadFromUDP(buffer)
+	fmt.Print("-> ", string(buffer[0:n]))
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	if a == "" {
 		a = genshortUUID()
 		fmt.Println("\n unique id generated from udpserver is ", a)
+		data := []byte(a)
+		_, err = connection.WriteToUDP(data, addr)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	} else {
 		fmt.Println("the connection id already generated  in tcp is ", a)
 	}
 
-	data := []byte(a)
-	_, err = connection.WriteToUDP(data, addr)
+	//_, err = connection.WriteToUDP(data, addr)
+	newbuffer := make([]byte, 1024)
+
+	for {
+		n, _, err2 := connection.ReadFromUDP(newbuffer)
+
+		//		if string(buffer[0:n]) != "" {
+
+		//			break
+
+		//		}
+		//fmt.Println("byteshere  read ", n)
+		if n < 1024 {
+			fmt.Println("condition for exiting")
+			break
+		}
+		if err2 != nil {
+			fmt.Println(err2)
+			return
+		}
+	}
+
+	fmt.Println("Done Handling")
+	data := []byte("over from udp server")
+	connection.WriteToUDP(data, addr)
 
 }
 func quicserver() {
@@ -120,6 +142,8 @@ func quicserver() {
 	if err != nil {
 		panic(err)
 	}
+	normalbuff := make([]byte, 100)
+	io.ReadAtLeast(stream, normalbuff, 1)
 	if a == "" {
 		a = genshortUUID()
 		fmt.Println("\n unique id generated from quicpserver is ", a)
@@ -128,20 +152,37 @@ func quicserver() {
 	}
 
 	counter := 0
-	//buff := make([]byte, 1024)
+
 	for {
 
 		if counter == 1 {
 			break
 		}
 
-		// Echo through the loggingWriter
-
 		io.WriteString(stream, a)
-		time.Sleep(5 * time.Second)
+
 		counter++
 
 	}
+
+	for {
+		buf := make([]byte, 1024)
+		n, err := io.ReadAtLeast(stream, buf, 1)
+		if err != nil {
+			fmt.Println(err)
+		}
+		//fmt.Println("bytes read: ", n)
+		if n < 1024 {
+			break
+		}
+
+	}
+	fmt.Println("done handling")
+	io.WriteString(stream, "last message from server")
+	for {
+
+	}
+
 }
 
 func genshortUUID() string {
@@ -171,5 +212,22 @@ func generateTLSConfig() *tls.Config {
 	return &tls.Config{
 		Certificates: []tls.Certificate{tlsCert},
 		NextProtos:   []string{"quic-sendreceive"},
+	}
+}
+func handleClient(c net.Conn, method string) {
+	buf := make([]byte, 1024)
+
+	for {
+		n, err := c.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+
+		//fmt.Println("bytes read: ", string(buf[0:n]))
+		if n < 1024 {
+			fmt.Println("condition for exiting")
+			break
+		}
+
 	}
 }
